@@ -8,54 +8,63 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.*;
+
+import java.util.List;
 
 @Configuration
 @RequiredArgsConstructor
-@EnableMethodSecurity // por si usas @PreAuthorize en controladores
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration cfg = new CorsConfiguration();
+        cfg.setAllowedOrigins(List.of("http://localhost:4200"));
+        cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+        cfg.setAllowedHeaders(List.of("*"));
+        cfg.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", cfg);
+        return source;
+    }
+
+    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-                .cors(c -> {})
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Público
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         .requestMatchers("/auth/**").permitAll()
 
-                        // Usuarios del sistema (solo ADMIN)
                         .requestMatchers("/users/**").hasRole("ADMIN")
 
-                        // Habitaciones
                         .requestMatchers(HttpMethod.GET, "/rooms/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
                         .requestMatchers(HttpMethod.POST, "/rooms/**").hasAnyRole("ADMIN","GERENTE")
                         .requestMatchers(HttpMethod.PUT, "/rooms/**").hasAnyRole("ADMIN","GERENTE")
                         .requestMatchers(HttpMethod.PATCH, "/rooms/**").hasAnyRole("ADMIN","GERENTE")
                         .requestMatchers(HttpMethod.DELETE, "/rooms/**").hasRole("ADMIN")
 
-                        // Clientes
                         .requestMatchers(HttpMethod.POST, "/customers/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
                         .requestMatchers(HttpMethod.GET, "/customers/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
 
-                        // Reservas
                         .requestMatchers(HttpMethod.POST, "/reservations/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
                         .requestMatchers(HttpMethod.GET, "/reservations/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
 
-                        // Pagos
                         .requestMatchers(HttpMethod.POST, "/payments/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
-                        .requestMatchers(HttpMethod.GET, "/payments/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA") // o quita recepcionista si quieres
+                        .requestMatchers(HttpMethod.GET, "/payments/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
 
-                        // Facturas
                         .requestMatchers(HttpMethod.POST, "/invoices/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
                         .requestMatchers(HttpMethod.GET, "/invoices/**").hasAnyRole("ADMIN","GERENTE","RECEPCIONISTA")
 
-                        // Reportes (solo gerencia y admin)
                         .requestMatchers("/reports/**").hasAnyRole("ADMIN","GERENTE")
 
-                        // El resto, autenticado
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
