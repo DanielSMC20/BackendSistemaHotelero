@@ -26,4 +26,13 @@ public class CustomerServiceImpl implements CustomerService {
         }
         return repo.findByNombresCompletosContainingIgnoreCase(name);
     }
+    @Override
+    public List<Clientes> findAll() {
+        return repo.findAll();
+    }
+    @Override
+    public Clientes findByDocumento(String documento) {
+        return repo.findByDocumento(documento)
+                .orElseThrow(() -> new RuntimeException("Cliente no encontrado con documento: " + documento));
+    }
 }

@@ -1,5 +1,6 @@
 package Hotel.jwt.controller;
 
+import Hotel.jwt.dto.common.ApiResponse;
 import Hotel.jwt.entity.Clientes;
 import Hotel.jwt.service.CustomerService;
 import lombok.RequiredArgsConstructor;
@@ -18,4 +19,14 @@ public class CustomerController {
 
     @GetMapping("/search")
     public List<Clientes> search(@RequestParam String q){ return service.searchByName(q); }
+
+    @GetMapping
+    public List<Clientes> listAll() {
+        return service.findAll();
+    }
+    @GetMapping("/documento/{documento}")
+    public ApiResponse<Clientes> getByDocument(@PathVariable String documento) {
+        Clientes cliente = service.findByDocumento(documento);
+        return ApiResponse.ok(cliente);
+    }
 }
