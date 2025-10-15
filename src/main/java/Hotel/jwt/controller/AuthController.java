@@ -1,6 +1,4 @@
     package Hotel.jwt.controller;
-
-
     import Hotel.jwt.dto.auth.LoginRequest;
     import Hotel.jwt.dto.auth.LoginResponse;
     import Hotel.jwt.dto.auth.RegisterRequest;
@@ -48,18 +46,20 @@
             long duracion = 1000L * 60 * 60 * 6; // 6 horas
             String token = jwtService.generate(req.getUsuario(), Map.of("app", "hotel-crm"), duracion);
 
-            return new LoginResponse(token, "Usuario registrado exitosamente");
+            return new LoginResponse(token, user);
         }
         @PostMapping("/login")
         public LoginResponse login(@RequestBody LoginRequest req){
             authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword())
             );
+            Usuario user = userRepository.findByUsuario(req.getUsername())
+                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
             long duracion = 1000L * 60 * 60 * 6; // 6 horas
             String token = jwtService.generate(req.getUsername(), Map.of("app","hotel-crm"), duracion);
 
-            return new LoginResponse(token, "Autenticación exitosa");
+            return new LoginResponse(token, user);
         }
 
     }

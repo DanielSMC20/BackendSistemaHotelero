@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -61,5 +62,30 @@ public class CustomerServiceImpl implements CustomerService {
                         HttpStatus.NOT_FOUND,
                         "Cliente no encontrado con documento: " + documento
                 ));
+    }
+
+    @Override
+    @Transactional
+    public Clientes updateByDocumento(String documento, Clientes c) {
+        Optional<Clientes> existingOpt = repo.findByDocumento(documento);
+        if (existingOpt.isEmpty()) {
+            throw new RuntimeException("Cliente no encontrado con documento: " + documento);
+        }
+
+        Clientes existing = existingOpt.get();
+
+        repo.updateByDocumento(
+                documento,
+                c.getNombresCompletos(),
+                c.getTelefono(),
+                c.getEmail()
+        );
+
+        // Refresca la entidad actualizada para devolverla actualizada
+        existing.setNombresCompletos(c.getNombresCompletos());
+        existing.setTelefono(c.getTelefono());
+        existing.setEmail(c.getEmail());
+
+        return existing;
     }
 }
