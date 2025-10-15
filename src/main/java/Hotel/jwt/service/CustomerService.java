@@ -9,6 +9,5 @@ public interface CustomerService {
     List<Clientes> searchByName(String name);
     List<Clientes> findAll();
     Clientes findByDocumento(String documento);
-
-
+    Clientes updateByDocumento(String documento, Clientes c);
 }

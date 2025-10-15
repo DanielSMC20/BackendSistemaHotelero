@@ -1,5 +1,6 @@
 package Hotel.jwt.controller;
 
+import Hotel.jwt.entity.Clientes;
 import Hotel.jwt.entity.Habitacion;
 import Hotel.jwt.service.RoomService;
 import lombok.RequiredArgsConstructor;
@@ -19,4 +20,9 @@ public class RoomController {
 
     @GetMapping("/available")
     public List<Habitacion> available(){ return service.listAvailable(); }
+    @GetMapping
+    public List<Habitacion> listAll() {
+        return service.findAll();
+    }
+
 }
