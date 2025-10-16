@@ -81,7 +81,6 @@ public class CustomerServiceImpl implements CustomerService {
                 c.getEmail()
         );
 
-        // Refresca la entidad actualizada para devolverla actualizada
         existing.setNombresCompletos(c.getNombresCompletos());
         existing.setTelefono(c.getTelefono());
         existing.setEmail(c.getEmail());

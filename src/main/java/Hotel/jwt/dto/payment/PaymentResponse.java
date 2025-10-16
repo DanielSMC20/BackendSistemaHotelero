@@ -13,4 +13,7 @@ public class PaymentResponse {
     private Double amount;
     private String method;
     private LocalDateTime paidAt;
+    private String status;
+    private String reference;
+    private String registeredBy;
 }

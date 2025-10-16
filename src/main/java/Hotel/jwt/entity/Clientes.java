@@ -4,8 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 
 
-import jakarta.persistence.*;
-import lombok.*;
 
 @Entity
 @Table(name = "clientes", uniqueConstraints = @UniqueConstraint(name = "uk_clientes_documento", columnNames = "documento"))
@@ -22,7 +20,8 @@ public class Clientes {
 
     @Column(name = "telefono", length = 20)
     private String telefono;
-
+    @Column(name="tipodocumento")
+    private String tipoDocumento;
     @Column(name = "documento", length = 30, nullable = false, unique = true) // <- IMPORTANTE
     private String documento;
 }
