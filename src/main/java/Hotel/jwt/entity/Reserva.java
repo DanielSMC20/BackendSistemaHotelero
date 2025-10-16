@@ -3,6 +3,7 @@ package Hotel.jwt.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -10,7 +11,8 @@ import java.time.LocalDate;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Reserva {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(optional = false)
@@ -29,4 +31,7 @@ public class Reserva {
 
     @Column(name = "estado", length = 20) // BOOKED, CHECKED_IN, CANCELLED, etc.
     private String estado;
+
+    @Column(name = "precio_total", nullable = false)
+    private BigDecimal precioTotal; // Monto total de la reserva
 }

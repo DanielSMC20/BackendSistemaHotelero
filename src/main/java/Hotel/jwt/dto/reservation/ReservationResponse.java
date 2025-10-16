@@ -3,6 +3,7 @@ package Hotel.jwt.dto.reservation;
 import lombok.Builder;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
@@ -16,4 +17,6 @@ public class ReservationResponse {
     private LocalDate checkIn;
     private LocalDate checkOut;
     private String status;
+    private BigDecimal precioTotal;
+
 }

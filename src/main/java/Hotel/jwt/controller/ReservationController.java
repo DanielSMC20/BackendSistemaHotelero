@@ -16,6 +16,9 @@ import java.util.List;
 public class ReservationController {
     private final ReservationService service;
 
+
+    @GetMapping
+    public List<Reserva> listAll(){ return service.listAll(); }
     @PostMapping
     public Reserva create(@RequestBody ReservationRequest req){ return service.create(req); }
 

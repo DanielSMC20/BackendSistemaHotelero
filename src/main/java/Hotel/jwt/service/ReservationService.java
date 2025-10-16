@@ -10,5 +10,6 @@ public interface ReservationService {
     Reserva create(ReservationRequest req);
     List<Reserva> byCustomer(Long customerId);
     Reserva createWithCustomer(ReservationWithCustomerRequest req);
+    List<Reserva> listAll();
 
 }
