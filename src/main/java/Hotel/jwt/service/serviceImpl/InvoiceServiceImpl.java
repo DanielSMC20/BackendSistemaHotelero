@@ -16,14 +16,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
 public class InvoiceServiceImpl implements InvoiceService {
 
+    private static final BigDecimal DEFAULT_TAX = new BigDecimal("0.18");
     private final InvoiceRepository invoiceRepo;
     private final ReservationRepository reservationRepo;
+
+    // ========= Public API =========
 
     @Override
     @Transactional
@@ -32,75 +35,168 @@ public class InvoiceServiceImpl implements InvoiceService {
         Reserva res = reservationRepo.findById(req.getReservationId())
                 .orElseThrow(() -> new NotFoundException("Reserva no encontrada: " + req.getReservationId()));
 
-        // 2) Verificar si ya tiene factura
+        // 2) Idempotencia: una reserva -> una factura
         invoiceRepo.findByReserva_Id(res.getId()).ifPresent(i -> {
             throw new BusinessException("La reserva ya fue facturada con número: " + i.getNumero());
         });
 
+        // 3) Tipo y serie
+        String tipo = normalizeType(req.getType()); // "BOLETA"/"FACTURA"
+        String serie = decideSerie(tipo, req.getSerie()); // "B001"/"F001" o la que mandes
 
-        BigDecimal total =
-                res.getPrecioTotal()
-                .setScale(2, RoundingMode.HALF_UP);
+        // 4) Monto base (override o precio de la reserva)
+        BigDecimal baseTotal = (req.getOverrideTotal() != null)
+                ? req.getOverrideTotal()
+                : safe(res.getPrecioTotal());
+        if (baseTotal.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("El total de la reserva no puede ser negativo.");
+        }
 
-        String prefix = (req.getNumberPrefix() == null || req.getNumberPrefix().isBlank())
-                ? "INV" : req.getNumberPrefix().trim();
-        String number = generateInvoiceNumber(prefix);
+        // 5) Impuesto (IGV)
+        BigDecimal taxRate = (req.getTaxRate() != null) ? req.getTaxRate() : DEFAULT_TAX;
 
+        // Aquí asumimos que el precio de reserva es PRECIO FINAL (incluye IGV).
+        // Si prefieres que sea precio SIN IGV, cambia la rama de cálculo.
+        BigDecimal total = scale2(baseTotal);
+        BigDecimal subtotal = scale2(total.divide(BigDecimal.ONE.add(taxRate), 2, RoundingMode.HALF_UP));
+        BigDecimal impuesto = scale2(total.subtract(subtotal));
+
+        // 6) Número correlativo: SERIE + "-" + yyyymmdd + "-" + 5chars
+        String numero = generateInvoiceNumber(serie);
+
+        // 7) Crear entidad
         Factura inv = Factura.builder()
                 .reserva(res)
-                .numero(number)
+                .tipo(tipo)
+                .serie(serie)
+                .numero(numero)
+                .subtotal(subtotal)
+                .impuesto(impuesto)
                 .total(total)
                 .estado("PENDIENTE")
-
                 .build();
 
         inv = invoiceRepo.save(inv);
 
-        // 6) Respuesta
-        return InvoiceResponse.builder()
-                .id(inv.getId())
-                .number(inv.getNumero())
-                .reservationId(res.getId())
-                .total(inv.getTotal())
-                .status(inv.getEstado())
-                .issuedAt(inv.getEmitidaEn())
-                .build();
+        // 8) Marcar como pagada si lo pides
+        if (req.isMarkPaid()) {
+            inv.marcarPagada();
+            invoiceRepo.save(inv);
+        }
+
+        // 9) Respuesta
+        return toResponse(inv);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public InvoiceResponse getByReservation(Long reservaId) {
         var inv = invoiceRepo.findByReserva_Id(reservaId)
                 .orElseThrow(() -> new NotFoundException("Factura no encontrada para la reserva " + reservaId));
-
-        return InvoiceResponse.builder()
-                .id(inv.getId())
-                .number(inv.getNumero())
-                .reservationId(inv.getReserva().getId())
-                .total(inv.getTotal())
-                .status(inv.getEstado())
-                .issuedAt(inv.getEmitidaEn())
-                .build();
+        return toResponse(inv);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public InvoiceResponse get(Long id) {
         var inv = invoiceRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Factura no encontrada: " + id));
+        return toResponse(inv);
+    }
 
+    @Transactional(readOnly = true)
+    public InvoiceResponse getByNumber(String numero) {
+        var inv = invoiceRepo.findByNumero(numero)
+                .orElseThrow(() -> new NotFoundException("Factura no encontrada: " + numero));
+        return toResponse(inv);
+    }
+
+    @Transactional
+    public InvoiceResponse markPaid(Long id) {
+        var inv = invoiceRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Factura no encontrada: " + id));
+
+        if ("ANULADA".equalsIgnoreCase(inv.getEstado())) {
+            throw new BusinessException("No se puede pagar una factura ANULADA.");
+        }
+        if ("PAGADA".equalsIgnoreCase(inv.getEstado())) {
+            return toResponse(inv); // idempotente
+        }
+
+        inv.marcarPagada();
+        invoiceRepo.save(inv);
+        return toResponse(inv);
+    }
+
+    @Transactional
+    public InvoiceResponse cancel(Long id) {
+        var inv = invoiceRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Factura no encontrada: " + id));
+
+        if ("PAGADA".equalsIgnoreCase(inv.getEstado())) {
+            throw new BusinessException("No se puede anular una factura PAGADA.");
+        }
+        if ("ANULADA".equalsIgnoreCase(inv.getEstado())) {
+            return toResponse(inv); // idempotente
+        }
+
+        inv.marcarAnulada();
+        invoiceRepo.save(inv);
+        return toResponse(inv);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<InvoiceResponse> listByDate(LocalDateTime desde, LocalDateTime hasta, String tipo, String estado) {
+        java.util.List<Factura> base = invoiceRepo.findByEmitidaEnBetween(desde, hasta);
+        return base.stream()
+                .filter(f -> tipo == null || tipo.equalsIgnoreCase(f.getTipo()))
+                .filter(f -> estado == null || estado.equalsIgnoreCase(f.getEstado()))
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // ========= Helpers =========
+
+    private String normalizeType(String input) {
+        String t = (input == null || input.isBlank()) ? "BOLETA" : input.trim().toUpperCase();
+        if (!t.equals("BOLETA") && !t.equals("FACTURA")) {
+            throw new BusinessException("Tipo de comprobante inválido (use BOLETA o FACTURA).");
+        }
+        return t;
+    }
+
+    private String decideSerie(String tipo, String serie) {
+        if (serie != null && !serie.isBlank()) return serie.trim().toUpperCase();
+        return "FACTURA".equalsIgnoreCase(tipo) ? "F001" : "B001";
+    }
+
+    private BigDecimal safe(BigDecimal n) {
+        return (n == null) ? BigDecimal.ZERO : n;
+    }
+
+    private BigDecimal scale2(BigDecimal n) {
+        return n.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String generateInvoiceNumber(String serie) {
+        String yyyymmdd = LocalDate.now().toString().replace("-", "");
+        String rand5 = java.util.UUID.randomUUID().toString().substring(0, 5).toUpperCase();
+        return serie + "-" + yyyymmdd + "-" + rand5;
+    }
+
+    private InvoiceResponse toResponse(Factura inv) {
         return InvoiceResponse.builder()
                 .id(inv.getId())
-                .number(inv.getNumero())
                 .reservationId(inv.getReserva().getId())
+                .type(inv.getTipo())
+                .serie(inv.getSerie())
+                .number(inv.getNumero())
+                .subtotal(inv.getSubtotal())
+                .tax(inv.getImpuesto())
                 .total(inv.getTotal())
                 .status(inv.getEstado())
                 .issuedAt(inv.getEmitidaEn())
+                .paidAt(inv.getPagadaEn())
                 .build();
-    }
-
-    // Helper para número de factura
-    private String generateInvoiceNumber(String prefix) {
-        String yyyymmdd = LocalDate.now().toString().replace("-", "");
-        String rand = UUID.randomUUID().toString().substring(0, 5).toUpperCase();
-        return "%s-%s-%s".formatted(prefix, yyyymmdd, rand);
     }
 }

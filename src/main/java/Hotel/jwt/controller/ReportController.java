@@ -32,4 +32,10 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end){
         return ApiResponse.ok(service.occupancyByDay(start, end));
     }
+    @GetMapping("/reports/daily-revenue/month")
+    public List<DailyRevenueItem> revenueByMonth(
+            @RequestParam int year,
+            @RequestParam int month) {
+        return service.revenueByMonth(year, month);
+    }
 }

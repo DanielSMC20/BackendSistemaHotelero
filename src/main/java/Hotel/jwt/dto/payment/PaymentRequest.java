@@ -6,7 +6,6 @@ import lombok.Data;
 public class PaymentRequest {
     private Long reservationId;
     private Double amount;
-    private String method;
-    private String reference;     // Ej: número de operación o voucher
-    private String registeredBy;
+    private String method;     // EFECTIVO/TARJETA/TRANSFERENCIA/YAPE/PLIN
+    private String reference;  // opcional
 }

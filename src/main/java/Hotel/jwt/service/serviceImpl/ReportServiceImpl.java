@@ -2,6 +2,7 @@ package Hotel.jwt.service.serviceImpl;
 
 import Hotel.jwt.dto.report.DailyRevenueItem;
 import Hotel.jwt.dto.report.OccupancyItem;
+import Hotel.jwt.entity.Reserva;
 import Hotel.jwt.repository.PaymentRepository;
 import Hotel.jwt.repository.ReservationRepository;
 import Hotel.jwt.repository.RoomRepository;
@@ -11,8 +12,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,19 +28,22 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public List<DailyRevenueItem> revenueByDay(LocalDate start, LocalDate end) {
-        LocalDateTime s = start.atStartOfDay();
-        LocalDateTime e = end.plusDays(1).atStartOfDay().minusSeconds(1);
+        // OJO: el orden correcto (end, start)
+        var reservas = reservationRepo
+                .findByFechaCheckOutBetween(end, start);
 
-        var rows = paymentRepo.sumByDay(s, e);
-        List<DailyRevenueItem> out = new ArrayList<>();
-        for (Object[] r : rows) {
-            // r[0] = java.sql.Date o String (dependiendo del driver), r[1] = BigDecimal/Double
-            LocalDate day = ((java.sql.Date) r[0]).toLocalDate();
-            Double total = r[1] != null ? Double.valueOf(r[1].toString()) : 0.0;
-            out.add(new DailyRevenueItem(day, total));
-        }
-        return out;
+        return reservas.stream()
+                .map(r -> new DailyRevenueItem(
+                        r.getHabitacion() != null ? r.getHabitacion().getNumero() : "-",
+                        r.getCliente() != null ? r.getCliente().getNombresCompletos() : "-",
+                        r.getCliente() != null ? r.getCliente().getDocumento() : "-",
+                        r.getFechaCheckIn(),
+                        r.getFechaCheckOut(),
+                        r.getPrecioTotal()
+                ))
+                .collect(Collectors.toList());
     }
+
 
     @Override
     public List<OccupancyItem> occupancyByDay(LocalDate start, LocalDate end) {
@@ -46,7 +53,7 @@ public class ReportServiceImpl implements ReportService {
         LocalDate d = start;
         while (!d.isAfter(end)) {
             long occupied = reservationRepo
-                    .findByCheckInLessThanEqualAndCheckOutGreaterThanEqual(d, d)
+                    .findByFechaCheckOutBetween(d, d)
                     .size();
 
             long available = totalRooms - occupied;
@@ -56,5 +63,24 @@ public class ReportServiceImpl implements ReportService {
             d = d.plusDays(1);
         }
         return out;
+    }
+    @Override
+    public List<DailyRevenueItem> revenueByMonth(int year, int month) {
+        YearMonth ym = YearMonth.of(year, month);
+        LocalDate start = ym.atDay(1);
+        LocalDate end   = ym.atEndOfMonth();
+
+        var reservas = reservationRepo.findByFechaCheckOutBetween(start, end);
+
+        return reservas.stream()
+                .map(r -> new DailyRevenueItem(
+                        r.getHabitacion()!=null ? r.getHabitacion().getNumero() : "-",
+                        r.getCliente()!=null ? r.getCliente().getNombresCompletos() : "-",
+                        r.getCliente()!=null ? r.getCliente().getDocumento() : "-",
+                        r.getFechaCheckIn(),
+                        r.getFechaCheckOut(),
+                        r.getPrecioTotal()
+                ))
+                .toList();
     }
 }
