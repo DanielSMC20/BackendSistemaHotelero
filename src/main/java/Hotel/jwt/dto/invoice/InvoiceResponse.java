@@ -1,3 +1,4 @@
+// InvoiceResponse.java
 package Hotel.jwt.dto.invoice;
 
 import lombok.Builder;
@@ -10,9 +11,17 @@ import java.time.LocalDateTime;
 @Builder
 public class InvoiceResponse {
     private Long id;
-    private String number;
     private Long reservationId;
+
+    private String type;
+    private String serie;
+    private String number;
+
+    private BigDecimal subtotal;
+    private BigDecimal tax;
     private BigDecimal total;
-    private String status;
+
+    private String status; // PENDIENTE | PAGADA | ANULADA
     private LocalDateTime issuedAt;
+    private LocalDateTime paidAt;
 }

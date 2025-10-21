@@ -1,12 +1,14 @@
 package Hotel.jwt.dto.payment;
 
-import lombok.Builder;
-import lombok.Data;
-
+import lombok.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class PaymentResponse {
     private Long id;
     private Long reservationId;
@@ -16,4 +18,13 @@ public class PaymentResponse {
     private String status;
     private String reference;
     private String registeredBy;
+
+    // Sub-DTO para reportes (ingresos por día)
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class DayTotal {
+        private LocalDate day;
+        private BigDecimal total;
+    }
 }

@@ -11,8 +11,8 @@ public class ReservationMapper {
                 .customerName(r.getCliente().getNombresCompletos())
                 .roomId(r.getHabitacion().getId())
                 .roomNumber(r.getHabitacion().getNumero())
-                .checkIn(r.getCheckIn())
-                .checkOut(r.getCheckOut())
+                .checkIn(r.getFechaCheckIn())
+                .checkOut(r.getFechaCheckOut())
                 .status(r.getEstado())
                 .build();
     }
