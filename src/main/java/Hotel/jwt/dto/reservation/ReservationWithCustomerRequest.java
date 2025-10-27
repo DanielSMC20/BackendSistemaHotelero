@@ -13,6 +13,8 @@ public class ReservationWithCustomerRequest {
     private String nombresCompletos;
     private String email;
     private String telefono;
+    private String phoneCountryCode; // ej. "+51"
+    private String telefonoE164;     // opcional si ya llega armado
 
     // Reserva
     private Long roomId;               // id de la habitación

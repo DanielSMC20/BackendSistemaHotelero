@@ -33,18 +33,16 @@ public class ReservationServiceImpl implements ReservationService {
     private final CustomerRepository customerRepo;
     private final UsuarioRepository usuarioRepo;
 
-
     @Override
     @Transactional
     public Reserva create(ReservationRequest req) {
         Habitacion hab = roomRepo.findById(req.getHabitacionId())
                 .orElseThrow(() -> new IllegalArgumentException("Habitación no encontrada"));
 
-        if (!hab.getEstado().equalsIgnoreCase("DISPONIBLE")) {
+        if (!"DISPONIBLE".equalsIgnoreCase(nullTo(hab.getEstado(), "DISPONIBLE"))) {
             throw new IllegalArgumentException("La habitación no está disponible");
         }
 
-        // Calcular noches
         long noches = ChronoUnit.DAYS.between(req.getCheckIn(), req.getCheckOut());
         if (noches <= 0) throw new IllegalArgumentException("Fechas inválidas de reserva");
 
@@ -52,7 +50,6 @@ public class ReservationServiceImpl implements ReservationService {
                 .setScale(2, RoundingMode.HALF_UP);
 
         Usuario actual = getCurrentUserOrNull();
-
 
         Reserva reserva = Reserva.builder()
                 .cliente(Clientes.builder().id(req.getClienteId()).build())
@@ -64,8 +61,8 @@ public class ReservationServiceImpl implements ReservationService {
                 .usuario(actual)
                 .build();
 
-        hab.setEstado("OCUPADA");
-        roomRepo.save(hab);
+        // ⚠️ Importante: NO OCUPAR la habitación aquí. Se ocupa en check-in.
+        // hab.setEstado("OCUPADA"); roomRepo.save(hab);
 
         return reservationRepo.save(reserva);
     }
@@ -74,21 +71,19 @@ public class ReservationServiceImpl implements ReservationService {
         Habitacion hab = roomRepo.findById(r.getHabitacion().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Habitación no encontrada"));
 
-        if (!hab.getEstado().equalsIgnoreCase("DISPONIBLE")) {
+        if (!"DISPONIBLE".equalsIgnoreCase(nullTo(hab.getEstado(), "DISPONIBLE"))) {
             throw new IllegalArgumentException("La habitación no está disponible");
         }
 
-        // Calcular noches
         long noches = ChronoUnit.DAYS.between(r.getFechaCheckIn(), r.getFechaCheckOut());
         if (noches <= 0) throw new IllegalArgumentException("Fechas inválidas de reserva");
 
         BigDecimal total = BigDecimal.valueOf(hab.getPrecioPorNoche() * noches);
-        r.setPrecioTotal(total.setScale(2, BigDecimal.ROUND_HALF_UP));
+        r.setPrecioTotal(total.setScale(2, RoundingMode.HALF_UP));
         r.setEstado("RESERVADO");
 
-        // Marcar habitación ocupada
-        hab.setEstado("OCUPADA");
-        roomRepo.save(hab);
+        // ⚠️ No ocupar aquí.
+        // hab.setEstado("OCUPADA"); roomRepo.save(hab);
 
         return reservationRepo.save(r);
     }
@@ -112,15 +107,13 @@ public class ReservationServiceImpl implements ReservationService {
         if ("CHECKED_IN".equalsIgnoreCase(reserva.getEstado())) {
             throw new IllegalStateException("La reserva ya fue registrada como CHECK-IN");
         }
-
         if (!"RESERVADO".equalsIgnoreCase(reserva.getEstado())) {
-            throw new IllegalStateException("Solo se puede hacer CHECK-IN de una reserva BOOKED");
+            throw new IllegalStateException("Solo se puede hacer CHECK-IN de una reserva RESERVADO");
         }
 
         reserva.setEstado("CHECKED_IN");
         reservationRepo.save(reserva);
 
-        // Marcar habitación como ocupada
         Habitacion hab = reserva.getHabitacion();
         hab.setEstado("OCUPADA");
         roomRepo.save(hab);
@@ -141,9 +134,8 @@ public class ReservationServiceImpl implements ReservationService {
         reserva.setEstado("CHECKED_OUT");
         reservationRepo.save(reserva);
 
-        // Liberar habitación (pasa a mantenimiento)
         Habitacion hab = reserva.getHabitacion();
-        hab.setEstado("MANTENIMIENTO");
+        hab.setEstado("MANTENIMIENTO"); // o "DISPONIBLE" según tu política
         roomRepo.save(hab);
 
         return reserva;
@@ -158,10 +150,7 @@ public class ReservationServiceImpl implements ReservationService {
         if (!"CHECKED_IN".equalsIgnoreCase(reserva.getEstado())) {
             throw new IllegalStateException("Solo se puede extender una reserva con CHECK-IN activo");
         }
-
-        if (horasExtra <= 0) {
-            throw new IllegalArgumentException("Las horas extra deben ser mayores a cero");
-        }
+        if (horasExtra <= 0) throw new IllegalArgumentException("Las horas extra deben ser mayores a cero");
 
         Habitacion hab = reserva.getHabitacion();
         double precioExtra = hab.getPrecioPorHora() * horasExtra;
@@ -169,8 +158,7 @@ public class ReservationServiceImpl implements ReservationService {
                 reserva.getPrecioTotal().add(BigDecimal.valueOf(precioExtra)).setScale(2, RoundingMode.HALF_UP)
         );
 
-        reservationRepo.save(reserva);
-        return reserva;
+        return reservationRepo.save(reserva);
     }
 
     @Override
@@ -184,87 +172,62 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     @Transactional
     public Reserva createWithCustomer(ReservationWithCustomerRequest req) {
-        // 1) Validaciones básicas
-        if (req == null) {
-            throw new IllegalArgumentException("El request no puede ser nulo.");
-        }
-        if (req.getDocumento() == null || req.getDocumento().trim().isEmpty()) {
-            throw new IllegalArgumentException("El documento del cliente es obligatorio.");
-        }
-        if (req.getRoomId() == null) {
-            throw new IllegalArgumentException("roomId es obligatorio.");
-        }
-        if (req.getCheckIn() == null || req.getCheckOut() == null) {
-            throw new IllegalArgumentException("checkIn y checkOut son obligatorios.");
-        }
-        if (!req.getCheckOut().isAfter(req.getCheckIn())) {
-            throw new IllegalArgumentException("checkOut debe ser posterior a checkIn.");
-        }
+        if (req == null) throw new IllegalArgumentException("El request no puede ser nulo.");
+        if (!StringUtils.hasText(req.getDocumento())) throw new IllegalArgumentException("El documento del cliente es obligatorio.");
+        if (req.getRoomId() == null) throw new IllegalArgumentException("roomId es obligatorio.");
+        if (req.getCheckIn() == null || req.getCheckOut() == null) throw new IllegalArgumentException("checkIn y checkOut son obligatorios.");
+        if (!req.getCheckOut().isAfter(req.getCheckIn())) throw new IllegalArgumentException("checkOut debe ser posterior a checkIn.");
 
         final String documento = req.getDocumento().trim();
         final String tipoDocReq = req.getTipoDocumento() == null ? "" : req.getTipoDocumento().trim().toUpperCase();
         final boolean esJuridica = "RUC".equals(tipoDocReq) || documento.length() == 11;
 
-        // 2) Cliente: crear o actualizar por documento
         Clientes cliente = customerRepo.findByDocumento(documento)
                 .orElseGet(() -> Clientes.builder().documento(documento).build());
 
-        // Tipo de persona / tipo de documento
         cliente.setTipoPersona(esJuridica ? "JURIDICA" : "NATURAL");
-        cliente.setTipoDocumento(
-                tipoDocReq.isEmpty()
-                        ? (esJuridica ? "RUC" : "DNI")
-                        : tipoDocReq
-        );
+        cliente.setTipoDocumento(tipoDocReq.isEmpty() ? (esJuridica ? "RUC" : "DNI") : tipoDocReq);
 
-        // Nombres o razón social según tipo de persona
         if (esJuridica) {
-            // No tienes campo separado en el request para razón social, reutilizamos nombresCompletos si viene
-            if (req.getNombresCompletos() != null && !req.getNombresCompletos().isBlank()) {
+            if (StringUtils.hasText(req.getNombresCompletos())) {
                 cliente.setRazonSocial(req.getNombresCompletos().trim());
             }
-            // opcional: limpiar nombresCompletos si quieres evitar ambigüedad
-            // cliente.setNombresCompletos(null);
         } else {
-            if (req.getNombresCompletos() != null && !req.getNombresCompletos().isBlank()) {
+            if (StringUtils.hasText(req.getNombresCompletos())) {
                 cliente.setNombresCompletos(req.getNombresCompletos().trim());
             }
         }
 
-        if (req.getEmail() != null && !req.getEmail().isBlank()) {
-            cliente.setEmail(req.getEmail().trim());
-        }
-        if (req.getTelefono() != null && !req.getTelefono().isBlank()) {
-            cliente.setTelefono(req.getTelefono().trim());
-        }
-        if (cliente.getEstado() == null || cliente.getEstado().isBlank()) {
-            cliente.setEstado("ACTIVO");
-        }
-        // @PrePersist en Clientes debería setear fechaRegistro si es null.
+        if (StringUtils.hasText(req.getEmail())) cliente.setEmail(req.getEmail().trim());
+
+        // ======= TELÉFONO: normalización con prefijo y E.164 =======
+        normalizeAndSetPhone(cliente,
+                req.getPhoneCountryCode(),   // puede ser null
+                req.getTelefono(),           // número local
+                req.getTelefonoE164());      // si ya viene armado
+
+        if (!StringUtils.hasText(cliente.getEstado())) cliente.setEstado("ACTIVO");
         cliente = customerRepo.save(cliente);
 
-        // 3) Habitación
+        // ===== Habitación =====
         Habitacion hab = roomRepo.findById(req.getRoomId())
                 .orElseThrow(() -> new NotFoundException("Habitación no encontrada: " + req.getRoomId()));
 
-        String estadoHab = (hab.getEstado() == null) ? "DISPONIBLE" : hab.getEstado().trim().toUpperCase();
+        String estadoHab = nullTo(hab.getEstado(), "DISPONIBLE").trim().toUpperCase();
         if (!"DISPONIBLE".equals(estadoHab)) {
             throw new IllegalStateException("La habitación no está disponible (estado actual: " + estadoHab + ")");
         }
 
-        // 4) Calcular precio total (noches x precioPorNoche)
-        long nights = java.time.temporal.ChronoUnit.DAYS.between(req.getCheckIn(), req.getCheckOut());
-        if (nights <= 0) nights = 1; // por seguridad, mínima 1 noche
+        // ===== Precio =====
+        long nights = ChronoUnit.DAYS.between(req.getCheckIn(), req.getCheckOut());
+        if (nights <= 0) nights = 1;
         double precioNoche = hab.getPrecioPorNoche() == null ? 0.0 : hab.getPrecioPorNoche();
-        java.math.BigDecimal total = java.math.BigDecimal.valueOf(precioNoche)
-                .multiply(java.math.BigDecimal.valueOf(nights))
-                .setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal total = BigDecimal.valueOf(precioNoche)
+                .multiply(BigDecimal.valueOf(nights)).setScale(2, RoundingMode.HALF_UP);
 
-        // 5) Usuario autenticado (puede ser null si la llamada es sin auth)
         Usuario actual = getCurrentUserOrNull();
 
-        // 6) Crear reserva
-        String estadoReserva = (req.getEstado() == null || req.getEstado().isBlank())
+        String estadoReserva = !StringUtils.hasText(req.getEstado())
                 ? "RESERVADO"
                 : req.getEstado().trim().toUpperCase();
 
@@ -275,17 +238,13 @@ public class ReservationServiceImpl implements ReservationService {
                 .fechaCheckOut(req.getCheckOut())
                 .estado(estadoReserva)
                 .precioTotal(total)
+                // .usuario(actual) // si tu entidad Reserva tiene este campo
                 .build();
-
-        // Relacionar usuario que registra la reserva (si agregaste el campo en Reserva)
-        // r.setUsuario(actual);
 
         r = reservationRepo.save(r);
 
-        // 7) Marcar habitación según política. Si reservas ocupan inmediatamente:
-        hab.setEstado("OCUPADA");
-        roomRepo.save(hab);
-        // Si prefieres ocupar solo en check-in, comenta las 2 líneas de arriba.
+        // ⚠️ Política: NO ocupar hasta check-in
+        // hab.setEstado("OCUPADA"); roomRepo.save(hab);
 
         return r;
     }
@@ -296,6 +255,76 @@ public class ReservationServiceImpl implements ReservationService {
         return usuarioRepo.findByUsuario(auth.getName()).orElse(null);
     }
 
+    // ====================== helpers ======================
 
+    private static String nullTo(String v, String def) { return v == null ? def : v; }
 
+    /**
+     * Normaliza y setea teléfono en cliente usando phoneCountryCode + telefono o telefonoE164.
+     * Regla: si viene E.164 lo valida y lo usa; si no, arma E.164 con code + local.
+     */
+    private void normalizeAndSetPhone(Clientes cliente, String phoneCountryCode, String telefonoLocal, String telefonoE164) {
+        String e164 = safe(telefonoE164);
+        String code = safe(phoneCountryCode);
+        String local = digitsOnly(telefonoLocal);
+
+        if (StringUtils.hasText(e164)) {
+            e164 = normalizeE164(e164);
+            // Si además viene code/local, guardamos ambos. Si no, derivamos local usando code si está.
+            if (!StringUtils.hasText(code)) {
+                // Heurística simple: si e164 inicia con +51, code="+51"
+                // Puedes mejorar consultando una tabla de phone-codes.
+                code = guessDialCode(e164);
+            } else {
+                code = normalizeCode(code);
+            }
+            if (!StringUtils.hasText(local) && StringUtils.hasText(code) && e164.startsWith(code)) {
+                local = e164.substring(code.length());
+            }
+            cliente.setTelefonoCodigoPais(code);
+            cliente.setTelefono(local);
+            cliente.setTelefonoE164(e164);
+            return;
+        }
+
+        // Si no vino E164, pero sí local (y quizás code)
+        if (StringUtils.hasText(local)) {
+            code = normalizeCode(StringUtils.hasText(code) ? code : "+51");
+            e164 = code + local;
+            e164 = normalizeE164(e164);
+            cliente.setTelefonoCodigoPais(code);
+            cliente.setTelefono(local);
+            cliente.setTelefonoE164(e164);
+        }
+    }
+
+    private static String safe(String v) { return v == null ? "" : v.trim(); }
+    private static String digitsOnly(String v) { return safe(v).replaceAll("\\D+", ""); }
+    private static String normalizeCode(String code) {
+        String c = safe(code).replaceAll("[^+\\d]", "");
+        return c.startsWith("+") ? c : "+" + c;
+    }
+    private static String normalizeE164(String val) {
+        String out = safe(val).replaceAll("[^+\\d]", "");
+        if (!out.startsWith("+")) out = "+" + out;
+        // Validación simple E.164: + y 8..15 dígitos
+        if (!out.matches("^\\+[1-9]\\d{7,14}$")) {
+            throw new IllegalArgumentException("Formato de teléfono inválido (E.164).");
+        }
+        return out;
+    }
+    private static String guessDialCode(String e164) {
+        // Heurística básica. Ideal: consultar tabla de prefijos y elegir el más largo que matchee.
+        if (e164.startsWith("+51")) return "+51";
+        if (e164.startsWith("+54")) return "+54";
+        if (e164.startsWith("+55")) return "+55";
+        if (e164.startsWith("+56")) return "+56";
+        if (e164.startsWith("+57")) return "+57";
+        if (e164.startsWith("+58")) return "+58";
+        if (e164.startsWith("+593")) return "+593";
+        if (e164.startsWith("+34")) return "+34";
+        if (e164.startsWith("+1")) return "+1";
+        // fallback genérico de 2 dígitos
+        return "+" + e164.substring(1, Math.min(3, e164.length()));
+    }
 }
