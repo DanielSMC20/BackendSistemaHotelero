@@ -24,13 +24,14 @@ public class ReservationController {
 
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA')")
     public ResponseEntity<List<Reserva>> listAll() {
         return ResponseEntity.ok(service.listAll());
     }
 
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA')")
     public ResponseEntity<Reserva> create(@RequestBody ReservationRequest reserva) {
         return ResponseEntity.ok(service.create(reserva));
     }
@@ -43,7 +44,7 @@ public class ReservationController {
 
 
     @PatchMapping("/{id}/checkin")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA')")
 
     public ResponseEntity<Reserva> checkIn(@PathVariable Long id) {
         return ResponseEntity.ok(service.checkIn(id));
@@ -51,7 +52,7 @@ public class ReservationController {
 
 
     @PatchMapping("/{id}/checkout")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA')")
 
     public ResponseEntity<Reserva> checkOut(@PathVariable Long id) {
         return ResponseEntity.ok(service.checkOut(id));
@@ -76,7 +77,7 @@ public class ReservationController {
     }
 
     @PostMapping("/with-customer")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA')")
     public ResponseEntity<Reserva> createWithCustomer(@RequestBody ReservationWithCustomerRequest req) {
         return ResponseEntity.ok(service.createWithCustomer(req));
     }

@@ -51,7 +51,7 @@ public class RoomController {
      * Listar disponibles
      */
     @GetMapping("/available")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','LIMPIEZA','GERENCIA','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','LIMPIEZA','GERENCIA','CONTABILIDAD')")
     public ResponseEntity<List<Habitacion>> available() {
         return ResponseEntity.ok(service.listAvailable());
     }
@@ -68,14 +68,14 @@ public class RoomController {
     // (compatibles con front legacy que usa 'disponible' gracias al shim de la entidad)
 
     @PatchMapping("/{id}/ocupar")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA')")
     public ResponseEntity<Void> ocupar(@PathVariable Long id) {
         service.marcarOcupada(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/liberar")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','LIMPIEZA')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','LIMPIEZA')")
     public ResponseEntity<Void> liberar(@PathVariable Long id) {
         service.marcarDisponible(id);
         return ResponseEntity.noContent().build();

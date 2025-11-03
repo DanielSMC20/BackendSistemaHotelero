@@ -25,21 +25,21 @@ public class PaymentController {
 
     // Registrar pago "local" (se graba COMPLETADO)
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<PaymentResponse>> record(@RequestBody PaymentRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(service.record(req)));
     }
 
     // Listar pagos de una reserva
     @GetMapping("/by-reservation/{reservaId}")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> byReservation(@PathVariable Long reservaId) {
         return ResponseEntity.ok(ApiResponse.ok(service.byReservation(reservaId)));
     }
 
     // Marcar pago COMLETO / REEMBOLSADO / FALLIDO (por si gestionas estados manuales)
     @PatchMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<Pago>> complete(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(service.marcarPagado(id)));
     }

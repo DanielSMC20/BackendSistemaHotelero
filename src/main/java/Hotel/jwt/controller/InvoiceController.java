@@ -18,26 +18,26 @@ public class InvoiceController {
 
     // Recepción SÍ puede emitir boleta/factura
     @PostMapping("/issue")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<InvoiceResponse>> issue(@RequestBody CreateInvoiceRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(service.issue(req)));
     }
 
     @GetMapping("/by-reservation/{reservationId}")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<InvoiceResponse>> byReservation(@PathVariable Long reservationId) {
         return ResponseEntity.ok(ApiResponse.ok(service.getByReservation(reservationId)));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<InvoiceResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(service.get(id)));
     }
 
     // Marcar pagada: puede recepción/conta/admin
     @PatchMapping("/{id}/paid")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
     public ResponseEntity<ApiResponse<InvoiceResponse>> markPaid(@PathVariable Long id) {
         // return ResponseEntity.ok(ApiResponse.ok(service.markPaid(id)));
         return ResponseEntity.status(501).body(ApiResponse.error("Implementar service.markPaid(id)"));
