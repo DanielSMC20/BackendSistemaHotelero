@@ -25,33 +25,33 @@ public class PaymentController {
 
     // Registrar pago "local" (se graba COMPLETADO)
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD','GERENCIA')")
     public ResponseEntity<ApiResponse<PaymentResponse>> record(@RequestBody PaymentRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(service.record(req)));
     }
 
     // Listar pagos de una reserva
     @GetMapping("/by-reservation/{reservaId}")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD','GERENCIA')")
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> byReservation(@PathVariable Long reservaId) {
         return ResponseEntity.ok(ApiResponse.ok(service.byReservation(reservaId)));
     }
 
     // Marcar pago COMLETO / REEMBOLSADO / FALLIDO (por si gestionas estados manuales)
     @PatchMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCIONISTA','CONTABILIDAD','GERENCIA')")
     public ResponseEntity<ApiResponse<Pago>> complete(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(service.marcarPagado(id)));
     }
 
     @PatchMapping("/{id}/refund")
-    @PreAuthorize("hasAnyRole('ADMIN','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTABILIDAD','GERENCIA')")
     public ResponseEntity<ApiResponse<Pago>> refund(@PathVariable Long id, @RequestParam String ref) {
         return ResponseEntity.ok(ApiResponse.ok(service.marcarReembolsado(id, ref)));
     }
 
     @PatchMapping("/{id}/fail")
-    @PreAuthorize("hasAnyRole('ADMIN','CONTABILIDAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','CONTABILIDAD','GERENCIA')")
     public ResponseEntity<ApiResponse<Pago>> fail(@PathVariable Long id, @RequestParam String ref) {
         return ResponseEntity.ok(ApiResponse.ok(service.marcarFallido(id, ref)));
     }

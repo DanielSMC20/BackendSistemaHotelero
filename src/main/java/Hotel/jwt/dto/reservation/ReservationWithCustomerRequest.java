@@ -21,4 +21,6 @@ public class ReservationWithCustomerRequest {
     private LocalDate checkIn;         // yyyy-MM-dd
     private LocalDate checkOut;        // yyyy-MM-dd
     private String estado;             // opcional; por defecto "RESERVADO"
+    private Boolean reservaPorHoras;
+    private Integer horas;
 }

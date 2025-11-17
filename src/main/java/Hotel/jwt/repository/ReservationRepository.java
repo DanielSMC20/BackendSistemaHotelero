@@ -45,4 +45,18 @@ public interface ReservationRepository extends JpaRepository<Reserva, Long> {
 
     // ✅ Este método derivado es 100% válido para tu entidad actual
     List<Reserva> findByFechaCheckOutBetween(LocalDate start, LocalDate end);
+    @Query("""
+        SELECT COUNT(r) > 0
+        FROM Reserva r
+        WHERE r.habitacion.id = :roomId
+          AND r.estado IN :estados
+          AND r.fechaCheckIn < :endDate
+          AND r.fechaCheckOut > :startDate
+    """)
+    boolean existsOverlappingReservation(
+            Long roomId,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            java.util.List<String> estados
+    );
 }

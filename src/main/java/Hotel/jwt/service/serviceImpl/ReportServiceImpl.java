@@ -39,7 +39,8 @@ public class ReportServiceImpl implements ReportService {
                         r.getCliente() != null ? r.getCliente().getDocumento() : "-",
                         r.getFechaCheckIn(),
                         r.getFechaCheckOut(),
-                        r.getPrecioTotal()
+                        r.getPrecioTotal(),
+                        r.getUsuario().getNombres() + " " + r.getUsuario().getApellidos()
                 ))
                 .collect(Collectors.toList());
     }
@@ -79,7 +80,8 @@ public class ReportServiceImpl implements ReportService {
                         r.getCliente()!=null ? r.getCliente().getDocumento() : "-",
                         r.getFechaCheckIn(),
                         r.getFechaCheckOut(),
-                        r.getPrecioTotal()
+                        r.getPrecioTotal(),
+                        r.getUsuario() != null ? r.getUsuario().getUsuario() : "-"
                 ))
                 .toList();
     }

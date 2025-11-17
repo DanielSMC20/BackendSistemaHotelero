@@ -173,20 +173,45 @@ public class ReservationServiceImpl implements ReservationService {
     @Transactional
     public Reserva createWithCustomer(ReservationWithCustomerRequest req) {
         if (req == null) throw new IllegalArgumentException("El request no puede ser nulo.");
-        if (!StringUtils.hasText(req.getDocumento())) throw new IllegalArgumentException("El documento del cliente es obligatorio.");
-        if (req.getRoomId() == null) throw new IllegalArgumentException("roomId es obligatorio.");
-        if (req.getCheckIn() == null || req.getCheckOut() == null) throw new IllegalArgumentException("checkIn y checkOut son obligatorios.");
-        if (!req.getCheckOut().isAfter(req.getCheckIn())) throw new IllegalArgumentException("checkOut debe ser posterior a checkIn.");
+        if (!StringUtils.hasText(req.getDocumento()))
+            throw new IllegalArgumentException("El documento del cliente es obligatorio.");
+        if (req.getRoomId() == null)
+            throw new IllegalArgumentException("roomId es obligatorio.");
 
+        // ¿reserva por horas?
+        boolean porHoras = Boolean.TRUE.equals(req.getReservaPorHoras());
+
+        // ===== Validación de fechas según el modo =====
+        if (!porHoras) {
+            // MODO NOCHES: validación original
+            if (req.getCheckIn() == null || req.getCheckOut() == null)
+                throw new IllegalArgumentException("checkIn y checkOut son obligatorios.");
+            if (!req.getCheckOut().isAfter(req.getCheckIn()))
+                throw new IllegalArgumentException("checkOut debe ser posterior a checkIn.");
+        } else {
+            // MODO HORAS: el cliente ya está en el local
+            if (req.getCheckIn() == null) {
+                throw new IllegalArgumentException("checkIn es obligatorio para reservas por horas.");
+            }
+            // checkOut lo podemos ignorar o usar solo como referencia; no aplicamos regla estricta
+        }
+
+        // ========= CLIENTE =========
         final String documento = req.getDocumento().trim();
-        final String tipoDocReq = req.getTipoDocumento() == null ? "" : req.getTipoDocumento().trim().toUpperCase();
+        final String tipoDocReq = req.getTipoDocumento() == null
+                ? ""
+                : req.getTipoDocumento().trim().toUpperCase();
         final boolean esJuridica = "RUC".equals(tipoDocReq) || documento.length() == 11;
 
         Clientes cliente = customerRepo.findByDocumento(documento)
                 .orElseGet(() -> Clientes.builder().documento(documento).build());
 
         cliente.setTipoPersona(esJuridica ? "JURIDICA" : "NATURAL");
-        cliente.setTipoDocumento(tipoDocReq.isEmpty() ? (esJuridica ? "RUC" : "DNI") : tipoDocReq);
+        cliente.setTipoDocumento(
+                tipoDocReq.isEmpty()
+                        ? (esJuridica ? "RUC" : "DNI")
+                        : tipoDocReq
+        );
 
         if (esJuridica) {
             if (StringUtils.hasText(req.getNombresCompletos())) {
@@ -198,18 +223,24 @@ public class ReservationServiceImpl implements ReservationService {
             }
         }
 
-        if (StringUtils.hasText(req.getEmail())) cliente.setEmail(req.getEmail().trim());
+        if (StringUtils.hasText(req.getEmail())) {
+            cliente.setEmail(req.getEmail().trim());
+        }
 
         // ======= TELÉFONO: normalización con prefijo y E.164 =======
-        normalizeAndSetPhone(cliente,
+        normalizeAndSetPhone(
+                cliente,
                 req.getPhoneCountryCode(),   // puede ser null
                 req.getTelefono(),           // número local
-                req.getTelefonoE164());      // si ya viene armado
+                req.getTelefonoE164()        // si ya viene armado
+        );
 
-        if (!StringUtils.hasText(cliente.getEstado())) cliente.setEstado("ACTIVO");
+        if (!StringUtils.hasText(cliente.getEstado())) {
+            cliente.setEstado("ACTIVO");
+        }
         cliente = customerRepo.save(cliente);
 
-        // ===== Habitación =====
+        // ========= HABITACIÓN =========
         Habitacion hab = roomRepo.findById(req.getRoomId())
                 .orElseThrow(() -> new NotFoundException("Habitación no encontrada: " + req.getRoomId()));
 
@@ -218,36 +249,84 @@ public class ReservationServiceImpl implements ReservationService {
             throw new IllegalStateException("La habitación no está disponible (estado actual: " + estadoHab + ")");
         }
 
-        // ===== Precio =====
-        long nights = ChronoUnit.DAYS.between(req.getCheckIn(), req.getCheckOut());
-        if (nights <= 0) nights = 1;
-        double precioNoche = hab.getPrecioPorNoche() == null ? 0.0 : hab.getPrecioPorNoche();
-        BigDecimal total = BigDecimal.valueOf(precioNoche)
-                .multiply(BigDecimal.valueOf(nights)).setScale(2, RoundingMode.HALF_UP);
+        // ========= PRECIO =========
+        BigDecimal total;
 
+        if (porHoras) {
+            // ----- Reserva por HORAS (cliente ya llegó) -----
+            Integer horas = req.getHoras();
+            if (horas == null || horas <= 0) {
+                throw new IllegalArgumentException("Las horas de reserva deben ser mayores a cero.");
+            }
+
+            double precioHora = hab.getPrecioPorHora() == null ? 0.0 : hab.getPrecioPorHora();
+            total = BigDecimal.valueOf(precioHora)
+                    .multiply(BigDecimal.valueOf(horas))
+                    .setScale(2, RoundingMode.HALF_UP);
+
+        } else {
+            // ----- Reserva por NOCHES (lógica original) -----
+            long nights = ChronoUnit.DAYS.between(req.getCheckIn(), req.getCheckOut());
+            if (nights <= 0) nights = 1;
+            double precioNoche = hab.getPrecioPorNoche() == null ? 0.0 : hab.getPrecioPorNoche();
+            total = BigDecimal.valueOf(precioNoche)
+                    .multiply(BigDecimal.valueOf(nights))
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        // ========= USUARIO QUE REGISTRA =========
         Usuario actual = getCurrentUserOrNull();
 
-        String estadoReserva = !StringUtils.hasText(req.getEstado())
-                ? "RESERVADO"
-                : req.getEstado().trim().toUpperCase();
+        // Estado de reserva:
+        // - Por noches: RESERVADO (espera check-in)
+        // - Por horas: CHECKED_IN (ya llegó y se ocupa al toque)
+        String estadoReserva;
+        if (porHoras) {
+            estadoReserva = "CHECKED_IN";
+        } else {
+            estadoReserva = !StringUtils.hasText(req.getEstado())
+                    ? "RESERVADO"
+                    : req.getEstado().trim().toUpperCase();
+        }
 
+        // ========= FECHAS QUE SE GUARDAN EN LA RESERVA =========
+        // Sigues usando LocalDate en la entidad:
+        // - Por noches: se respeta checkIn/checkOut del request.
+        // - Por horas: usamos checkIn del request y, si quieres, mismo día en checkOut.
+        java.time.LocalDate fechaCheckIn = req.getCheckIn();
+        java.time.LocalDate fechaCheckOut;
+
+        if (porHoras) {
+            // Puedes dejarlo igual al checkIn (misma fecha)
+            fechaCheckOut = req.getCheckIn();
+        } else {
+            fechaCheckOut = req.getCheckOut();
+        }
+
+        // ========= CONSTRUIR RESERVA =========
         Reserva r = Reserva.builder()
                 .cliente(cliente)
                 .habitacion(hab)
-                .fechaCheckIn(req.getCheckIn())
-                .fechaCheckOut(req.getCheckOut())
+                .fechaCheckIn(fechaCheckIn)
+                .fechaCheckOut(fechaCheckOut)
                 .estado(estadoReserva)
                 .precioTotal(total)
-                // .usuario(actual) // si tu entidad Reserva tiene este campo
+                .usuario(actual)
                 .build();
 
         r = reservationRepo.save(r);
 
-        // ⚠️ Política: NO ocupar hasta check-in
-        // hab.setEstado("OCUPADA"); roomRepo.save(hab);
+        // ========= OCUPAR HABITACIÓN SOLO EN MODO HORAS =========
+        if (porHoras) {
+            hab.setEstado("OCUPADA");
+            roomRepo.save(hab);
+        }
+        // Para reservas por noches se mantiene la política:
+        // "NO ocupar hasta check-in"
 
         return r;
     }
+
 
     private Usuario getCurrentUserOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
