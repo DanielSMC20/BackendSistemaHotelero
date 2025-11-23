@@ -46,6 +46,10 @@ public class Pago {
     @Column(name = "pagado_en", nullable = false)
     private LocalDateTime pagadoEn;
 
+    @Lob
+    @Column(name = "comprobante_pdf")
+    private byte[] comprobantePdf;
+
     @PrePersist
     void alPagar() {
         if (this.pagadoEn == null) this.pagadoEn = LocalDateTime.now();

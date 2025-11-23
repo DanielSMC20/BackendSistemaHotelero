@@ -7,6 +7,8 @@ import Hotel.jwt.entity.Pago;
 import Hotel.jwt.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -66,5 +68,21 @@ public class PaymentController {
         LocalDateTime s = start.atStartOfDay();
         LocalDateTime e = end.plusDays(1).atStartOfDay().minusSeconds(1);
         return ResponseEntity.ok(ApiResponse.ok(service.sumByDay(s, e)));
+    }
+
+    @GetMapping("/{id}/comprobante")
+    public ResponseEntity<byte[]> descargarComprobante(@PathVariable Long id) {
+        Pago pago = service.obtenerPago(id);
+
+        byte[] pdf = pago.getComprobantePdf();
+        if (pdf == null || pdf.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=boleta_" + id + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 }

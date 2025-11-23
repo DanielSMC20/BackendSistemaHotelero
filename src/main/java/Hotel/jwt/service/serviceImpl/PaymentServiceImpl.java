@@ -10,6 +10,7 @@ import Hotel.jwt.repository.PaymentRepository;
 import Hotel.jwt.repository.ReservationRepository;
 import Hotel.jwt.repository.UsuarioRepository;
 import Hotel.jwt.service.PaymentService;
+import Hotel.jwt.service.PdfService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -35,12 +36,15 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepo;
     private final ReservationRepository reservationRepo;
     private final UsuarioRepository usuarioRepo;
+    private final PdfService pdfService;
+
 
     // =================== API ===================
 
     @Override
     @Transactional
     public PaymentResponse record(PaymentRequest req) {
+
         // 1) Validar reserva
         Reserva res = reservationRepo.findById(req.getReservationId())
                 .orElseThrow(() -> new NotFoundException("Reserva no encontrada: " + req.getReservationId()));
@@ -51,15 +55,16 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new NotFoundException("Usuario del sistema no encontrado: " + username));
         String nombreCompletoEmpleado = buildNombreCompleto(empleado);
 
-        // 3) Validaciones de negocio
+        // 3) Validaciones
         double monto = normalizeAmount(req.getAmount());
         validarMetodo(req.getMethod());
+
         if (req.getReference() != null && !req.getReference().isBlank()
                 && paymentRepo.existsByReferencia(req.getReference())) {
             throw new IllegalArgumentException("Ya existe un pago con referencia " + req.getReference());
         }
 
-        // 4) Crear pago
+        // 4) Crear objeto Pago (sin PDF todavía)
         Pago p = Pago.builder()
                 .reserva(res)
                 .monto(monto)
@@ -73,16 +78,24 @@ public class PaymentServiceImpl implements PaymentService {
             p.setPagadoEn(LocalDateTime.now());
         }
 
+        // 5) Guardar pago (para obtener ID)
         p = paymentRepo.save(p);
 
-        // 5) (Sin tocar entidad Reserva) – calcular estado de pago "al vuelo"
-        //    Suma pagos completados de la reserva y compara contra precioTotal
-        BigDecimal pagado = getTotalPagado(res.getId());             // suma pagos COMPLETADO
-        BigDecimal total  = safeTotal(res.getPrecioTotal());         // precioTotal (BigDecimal)
-        // Si lo necesitas en logs o respuesta, puedes derivar:
+        // 6) Generar PDF del comprobante
+        byte[] pdf = pdfService.generarComprobantePago(p);
+
+        // 7) Guardarlo en la BD
+        p.setComprobantePdf(pdf);
+        p = paymentRepo.save(p);
+
+        // ------------------------------
+        // Estado del pago (si necesitas)
+        // ------------------------------
+        BigDecimal pagado = getTotalPagado(res.getId());
+        BigDecimal total  = safeTotal(res.getPrecioTotal());
         // String estadoPago = derivePaymentState(pagado, total);
 
-        // 6) Respuesta
+        // 8) Respuesta final
         return PaymentResponse.builder()
                 .id(p.getId())
                 .reservationId(res.getId())
