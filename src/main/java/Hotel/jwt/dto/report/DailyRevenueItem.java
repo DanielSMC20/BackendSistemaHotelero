@@ -18,5 +18,7 @@ public class DailyRevenueItem {
     private LocalDate checkOut;
     private BigDecimal price;
     private String usuarioRegistro;
+    private Long paymentId;
+
 
 }

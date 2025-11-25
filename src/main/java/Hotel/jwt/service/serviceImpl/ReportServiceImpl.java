@@ -28,20 +28,28 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public List<DailyRevenueItem> revenueByDay(LocalDate start, LocalDate end) {
-        // OJO: el orden correcto (end, start)
+        // OJO: aquí yo esperaría (start, end), revisa si está al revés por algo especial
         var reservas = reservationRepo
-                .findByFechaCheckOutBetween(end, start);
+                .findByFechaCheckOutBetween(start, end);
 
         return reservas.stream()
-                .map(r -> new DailyRevenueItem(
-                        r.getHabitacion() != null ? r.getHabitacion().getNumero() : "-",
-                        r.getCliente() != null ? r.getCliente().getNombresCompletos() : "-",
-                        r.getCliente() != null ? r.getCliente().getDocumento() : "-",
-                        r.getFechaCheckIn(),
-                        r.getFechaCheckOut(),
-                        r.getPrecioTotal(),
-                        r.getUsuario().getNombres() + " " + r.getUsuario().getApellidos()
-                ))
+                .map(r -> {
+                    // 👇 Buscar el pago asociado a la reserva
+                    var paymentOpt = paymentRepo.findTopByReservaOrderByPagadoEnDesc(r);
+                    Long paymentId = paymentOpt.map(p -> p.getId()).orElse(null);
+
+                    return new DailyRevenueItem(
+                            r.getHabitacion() != null ? r.getHabitacion().getNumero() : "-",
+                            r.getCliente() != null ? r.getCliente().getNombresCompletos() : "-",
+                            r.getCliente() != null ? r.getCliente().getDocumento() : "-",
+                            r.getFechaCheckIn(),
+                            r.getFechaCheckOut(),
+                            r.getPrecioTotal(),
+
+                            r.getUsuario().getNombres() + " " + r.getUsuario().getApellidos(),
+                            paymentId // 👈 NUEVO
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
@@ -74,15 +82,22 @@ public class ReportServiceImpl implements ReportService {
         var reservas = reservationRepo.findByFechaCheckOutBetween(start, end);
 
         return reservas.stream()
-                .map(r -> new DailyRevenueItem(
-                        r.getHabitacion()!=null ? r.getHabitacion().getNumero() : "-",
-                        r.getCliente()!=null ? r.getCliente().getNombresCompletos() : "-",
-                        r.getCliente()!=null ? r.getCliente().getDocumento() : "-",
-                        r.getFechaCheckIn(),
-                        r.getFechaCheckOut(),
-                        r.getPrecioTotal(),
-                        r.getUsuario() != null ? r.getUsuario().getUsuario() : "-"
-                ))
+                .map(r -> {
+                    var paymentOpt = paymentRepo.findTopByReservaOrderByPagadoEnDesc(r);
+                    Long paymentId = paymentOpt.map(p -> p.getId()).orElse(null);
+
+                    return new DailyRevenueItem(
+                            r.getHabitacion()!=null ? r.getHabitacion().getNumero() : "-",
+                            r.getCliente()!=null ? r.getCliente().getNombresCompletos() : "-",
+                            r.getCliente()!=null ? r.getCliente().getDocumento() : "-",
+                            r.getFechaCheckIn(),
+                            r.getFechaCheckOut(),
+                            r.getPrecioTotal(),
+                            r.getUsuario() != null ? r.getUsuario().getUsuario() : "-",
+                            paymentId // 👈 NUEVO
+                    );
+                })
                 .toList();
     }
+
 }
