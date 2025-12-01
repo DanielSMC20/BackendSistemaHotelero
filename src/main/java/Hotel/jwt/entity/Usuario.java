@@ -9,7 +9,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
-
 @Entity
 @Table(name = "usuarios")
 @Getter
@@ -42,6 +41,9 @@ public class Usuario implements UserDetails {
 
     @Column(name = "pais", length = 50)
     private String pais;
+
+    @Column(name = "estado", nullable = false)
+    private Integer estado;   // 1 = activo, 0 = inactivo
 
     // ==============================================
     // Métodos para Spring Security (UserDetails)
@@ -84,7 +86,8 @@ public class Usuario implements UserDetails {
     @Override
     @JsonIgnore
     public boolean isEnabled() {
-        return true;
+        // Solo está habilitado si estado = 1
+        return estado != null && estado == 1;
     }
 
     // Helper opcional para mostrar nombre completo

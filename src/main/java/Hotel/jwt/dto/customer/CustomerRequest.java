@@ -5,8 +5,12 @@ import lombok.Data;
 
 @Data
 public class CustomerRequest {
-    private String fullName;
+    private String documento;
+    private String tipoDocumento;
+    private String nombresCompletos;
     private String email;
-    private String phone;
-    private String documentId;
+
+    private String phoneCountryCode;
+    private String telefono;
+    private String telefonoE164;
 }

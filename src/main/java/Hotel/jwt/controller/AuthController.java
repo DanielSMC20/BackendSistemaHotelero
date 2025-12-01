@@ -2,6 +2,7 @@
     import Hotel.jwt.dto.auth.LoginRequest;
     import Hotel.jwt.dto.auth.LoginResponse;
     import Hotel.jwt.dto.auth.RegisterRequest;
+    import Hotel.jwt.dto.auth.UpdateUserRequest;
     import Hotel.jwt.entity.Usuario;
     import Hotel.jwt.repository.UserRepository;
     import Hotel.jwt.security.jwt.JwtService;
@@ -11,6 +12,7 @@
     import org.springframework.security.crypto.password.PasswordEncoder;
     import org.springframework.web.bind.annotation.*;
 
+    import java.util.List;
     import java.util.Map;
 
     @RestController
@@ -39,6 +41,7 @@
                     .apellidos(req.getApellidos())
                     .pais(req.getPais())
                     .role(req.getRol())
+                    .estado(1)
                     .build();
 
             userRepository.save(user);
@@ -60,6 +63,40 @@
             String token = jwtService.generate(req.getUsername(), Map.of("app","hotel-crm"), duracion);
 
             return new LoginResponse(token, user);
+        }
+
+        @PutMapping("/users/{id}")
+        public Usuario updateUser(@PathVariable Integer id,
+                                  @RequestBody UpdateUserRequest req) {
+
+            Usuario user = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+            if (req.getNombres() != null) user.setNombres(req.getNombres());
+            if (req.getApellidos() != null) user.setApellidos(req.getApellidos());
+            if (req.getPais() != null) user.setPais(req.getPais());
+            if (req.getRole() != null) user.setRole(req.getRole()); // enum
+
+            return userRepository.save(user);
+        }
+
+        @PatchMapping("/users/{id}/estado")
+        public Usuario changeEstado(@PathVariable Integer id,
+                                    @RequestBody Map<String, Integer> body) {
+
+            Integer estado = body.get("estado");
+
+            Usuario user = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+            user.setEstado(estado);
+
+            return userRepository.save(user);
+        }
+
+        @GetMapping("/users")
+        public List<Usuario> getAll() {
+            return userRepository.findAll();
         }
 
     }

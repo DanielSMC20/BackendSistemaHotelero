@@ -1,5 +1,6 @@
 package Hotel.jwt.service.serviceImpl;
 
+import Hotel.jwt.dto.customer.CustomerRequest;
 import Hotel.jwt.entity.Clientes;
 import Hotel.jwt.repository.CustomerRepository;
 import Hotel.jwt.service.CustomerService;
@@ -128,6 +129,97 @@ public class CustomerServiceImpl implements CustomerService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Documento o email duplicado en la base de datos", ex);
         }
+    }
+    @Transactional
+    public Clientes createFromRequest(CustomerRequest req) {
+        if (req == null) {
+            throw new IllegalArgumentException("El request no puede ser nulo.");
+        }
+        if (!StringUtils.hasText(req.getDocumento())) {
+            throw new IllegalArgumentException("El documento del cliente es obligatorio.");
+        }
+
+        final String documento = req.getDocumento().trim();
+        final String tipoDocReq = req.getTipoDocumento() == null
+                ? ""
+                : req.getTipoDocumento().trim().toUpperCase();
+
+        // ==== Detectar si es persona jurídica (misma idea que en createWithCustomer) ====
+        final boolean esJuridica = "RUC".equals(tipoDocReq) || documento.length() == 11;
+
+        Clientes c = new Clientes();
+        c.setDocumento(documento);
+
+        // Tipo persona
+        c.setTipoPersona(esJuridica ? "JURIDICA" : "NATURAL");
+
+        // Tipo documento
+        if (!tipoDocReq.isEmpty()) {
+            c.setTipoDocumento(tipoDocReq);
+        } else {
+            c.setTipoDocumento(esJuridica ? "RUC" : "DNI");
+        }
+
+        // Nombre / Razón social
+        if (StringUtils.hasText(req.getNombresCompletos())) {
+            String valor = req.getNombresCompletos().trim();
+            if (esJuridica) {
+                c.setRazonSocial(valor);
+            } else {
+                c.setNombresCompletos(valor);
+            }
+        }
+
+        // Email
+        if (StringUtils.hasText(req.getEmail())) {
+            c.setEmail(req.getEmail().trim());
+        }
+
+        // Teléfono (igual idea que en reserva)
+        normalizeAndSetPhone(
+                c,
+                req.getPhoneCountryCode(),
+                req.getTelefono(),
+                req.getTelefonoE164()
+        );
+
+        // Estado por defecto (por si no lo llena normalizar)
+        if (!StringUtils.hasText(c.getEstado())) {
+            c.setEstado("ACTIVO");
+        }
+
+        // Delegar en tu create(Clientes c) que ya valida duplicados, etc.
+        return create(c);
+    }
+    private void normalizeAndSetPhone(
+            Clientes c,
+            String phoneCountryCode,
+            String telefono,
+            String telefonoE164
+    ) {
+        String cc = phoneCountryCode == null ? "" : phoneCountryCode.trim();
+        String tel = telefono == null ? "" : telefono.trim();
+        String e164 = telefonoE164 == null ? "" : telefonoE164.trim();
+
+        if (!StringUtils.hasText(cc)) {
+            cc = "+51"; // default (ajusta si quieres)
+        }
+
+        if (StringUtils.hasText(e164)) {
+            // Si ya viene armado, solo seteamos
+            c.setTelefonoCodigoPais(cc);
+            c.setTelefono(tel);
+            c.setTelefonoE164(e164);
+            return;
+        }
+
+        // Construimos E.164 simple: +51 + solo dígitos
+        String soloDigitos = tel.replaceAll("\\D", "");
+        String e164Build = cc + soloDigitos;
+
+        c.setTelefonoCodigoPais(cc);
+        c.setTelefono(tel);
+        c.setTelefonoE164(e164Build);
     }
 
     @Override

@@ -28,15 +28,18 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public List<DailyRevenueItem> revenueByDay(LocalDate start, LocalDate end) {
-        // OJO: aquí yo esperaría (start, end), revisa si está al revés por algo especial
-        var reservas = reservationRepo
-                .findByFechaCheckOutBetween(start, end);
+
+        var reservas = reservationRepo.findByRangoFechas(start, end);
 
         return reservas.stream()
                 .map(r -> {
-                    // 👇 Buscar el pago asociado a la reserva
                     var paymentOpt = paymentRepo.findTopByReservaOrderByPagadoEnDesc(r);
                     Long paymentId = paymentOpt.map(p -> p.getId()).orElse(null);
+
+                    String atendidoPor = "-";
+                    if (r.getUsuario() != null) {
+                        atendidoPor = r.getUsuario().getNombres() + " " + r.getUsuario().getApellidos();
+                    }
 
                     return new DailyRevenueItem(
                             r.getHabitacion() != null ? r.getHabitacion().getNumero() : "-",
@@ -45,9 +48,8 @@ public class ReportServiceImpl implements ReportService {
                             r.getFechaCheckIn(),
                             r.getFechaCheckOut(),
                             r.getPrecioTotal(),
-
-                            r.getUsuario().getNombres() + " " + r.getUsuario().getApellidos(),
-                            paymentId // 👈 NUEVO
+                            atendidoPor,
+                            paymentId
                     );
                 })
                 .collect(Collectors.toList());
@@ -56,13 +58,30 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public List<OccupancyItem> occupancyByDay(LocalDate start, LocalDate end) {
+        // Normalizar fechas igual que en revenueByDay
+        if (start == null && end == null) {
+            LocalDate hoy = LocalDate.now();
+            start = hoy;
+            end   = hoy;
+        } else if (start == null) {
+            start = end;
+        } else if (end == null) {
+            end = start;
+        }
+
+        if (start.isAfter(end)) {
+            LocalDate tmp = start;
+            start = end;
+            end   = tmp;
+        }
+
         long totalRooms = roomRepo.count();
         List<OccupancyItem> out = new ArrayList<>();
 
         LocalDate d = start;
         while (!d.isAfter(end)) {
             long occupied = reservationRepo
-                    .findByFechaCheckOutBetween(d, d)
+                    .findByFechaCheckOutBetween(d, d)  // 👈 mismo día
                     .size();
 
             long available = totalRooms - occupied;
@@ -73,13 +92,15 @@ public class ReportServiceImpl implements ReportService {
         }
         return out;
     }
+
     @Override
     public List<DailyRevenueItem> revenueByMonth(int year, int month) {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end   = ym.atEndOfMonth();
 
-        var reservas = reservationRepo.findByFechaCheckOutBetween(start, end);
+
+        var reservas = reservationRepo.findByRangoFechas(start, end);
 
         return reservas.stream()
                 .map(r -> {
@@ -94,7 +115,7 @@ public class ReportServiceImpl implements ReportService {
                             r.getFechaCheckOut(),
                             r.getPrecioTotal(),
                             r.getUsuario() != null ? r.getUsuario().getUsuario() : "-",
-                            paymentId // 👈 NUEVO
+                            paymentId
                     );
                 })
                 .toList();
